@@ -83,6 +83,10 @@ rm -rf "${NPM_CONFIG_CACHE}"
 npm run gulp vscode-linux-x64-min
 
 # --- install ---
-mkdir -p "${PREFIX}/lib/positron" "${PREFIX}/bin"
-cp -a ../VSCode-linux-x64/. "${PREFIX}/lib/positron/"
+# free disk before packaging: the build trees are no longer needed
+rm -rf node_modules build/node_modules remote/node_modules extensions/*/node_modules \
+  out out-build out-vscode-min .build _bin
+mkdir -p "${PREFIX}/lib" "${PREFIX}/bin"
+# mv (same filesystem) instead of cp, to avoid duplicating ~1GB on the full CI disk
+mv ../VSCode-linux-x64 "${PREFIX}/lib/positron"
 ln -sf ../lib/positron/bin/positron "${PREFIX}/bin/positron"
