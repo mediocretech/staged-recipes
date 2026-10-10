@@ -49,7 +49,9 @@ build:
   prefix_detection:
     ignore_binary_files: true
   dynamic_linking:
-    binary_relocation: false
+    # only relocate the Electron executable so it finds conda's nss/gtk/X11 libs in $PREFIX/lib
+    binary_relocation:
+      - lib/positron/positron
 
 requirements:
   build:
