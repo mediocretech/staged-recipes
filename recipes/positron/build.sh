@@ -72,12 +72,24 @@ printf '%s' "${PET_VERSION}" > extensions/positron-python/resources/pet/VERSION
 # The CI agents are short on disk: drop rust build trees and caches
 rm -rf extensions/positron-r/ark/target/{debug,x86_64-*} _kallichore/target _pet/target "${CARGO_HOME:-$HOME/.cargo}/registry" "${CARGO_HOME:-$HOME/.cargo}/git"
 
+# --- Vendored pure-python libraries for positron-python (patch 0002) ---
+# Built from sdist where conda-forge lacks the pinned version; the rest come from the build env.
+python -m pip install --no-deps --no-build-isolation --no-index --target "${SRC_DIR}/_pysrc" \
+  ./_pysrc_src/cattrs ./_pysrc_src/pydantic
+export CONDA_VENDOR_SCRIPT="${RECIPE_DIR}/copy_from_env.py"
+export CONDA_VENDOR_PATHS="${SRC_DIR}/_pysrc:$(python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+# requirements.txt pins typing-extensions 4.15.0 and the kernel requirements pin 4.10.0;
+# only one version can be in the build env, so allow 4.15.0 for both
+export CONDA_VENDOR_ALLOW_MISMATCH=typing-extensions
+export CONDA_VENDOR_LICENSES="${SRC_DIR}/_vendored_licenses"
+
+# compile native node modules instead of downloading prebuilt binaries
+export npm_config_build_from_source=true
+
 # --- Positron ---
 export NPM_CONFIG_CACHE="${SRC_DIR}/.npm-cache"
 # CI=1 makes postinstall skip syncing submodules against their remotes.
-# positron-python's postinstall pip-installs its hash-pinned pure-python helper
-# wheels (python_files/lib), so let pip reach PyPI for that step.
-env -u PIP_NO_INDEX CI=1 npm ci --no-audit --no-fund
+CI=1 npm ci --no-audit --no-fund
 rm -rf "${NPM_CONFIG_CACHE}"
 # desktop-only build (core-ci would also build the remote server variants, which exhausts CI memory)
 npm run gulp vscode-linux-x64-min
@@ -90,3 +102,17 @@ mkdir -p "${PREFIX}/lib" "${PREFIX}/bin"
 # mv (same filesystem) instead of cp, to avoid duplicating ~1GB on the full CI disk
 mv ../VSCode-linux-x64 "${PREFIX}/lib/positron"
 ln -sf ../lib/positron/bin/positron "${PREFIX}/bin/positron"
+
+# collect the license files of everything bundled in the app (npm packages, PDF.js, vendored python)
+python - <<'PY'
+import os, re, shutil
+app = os.path.join(os.environ["PREFIX"], "lib", "positron", "resources", "app")
+out = os.path.join(os.environ["SRC_DIR"], "third-party-licenses")
+for root, dirs, files in os.walk(app):
+    for f in files:
+        if re.match(r"(LICEN[CS]E|COPYING|NOTICE)", f, re.I):
+            rel = os.path.relpath(os.path.join(root, f), app)
+            dst = os.path.join(out, rel)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copy2(os.path.join(root, f), dst)
+PY
