@@ -103,6 +103,21 @@ mkdir -p "${PREFIX}/lib" "${PREFIX}/bin"
 mv ../VSCode-linux-x64 "${PREFIX}/lib/positron"
 ln -sf ../lib/positron/bin/positron "${PREFIX}/bin/positron"
 
+# use conda-forge's ripgrep instead of the prebuilt rg downloaded by @vscode/ripgrep
+rg_bundled="${PREFIX}/lib/positron/resources/app/node_modules.asar.unpacked/@vscode/ripgrep-universal/bin/linux-x64/rg"
+if [[ -e "${rg_bundled}" ]]; then
+  rm -f "${rg_bundled}"
+  ln -s ../../../../../../../../../bin/rg "${rg_bundled}"
+fi
+
+# js-debug's VSIX ships Windows-only native helpers; they're unused on linux
+find "${PREFIX}/lib/positron/resources/app/extensions" -name '*win32*.node' -delete
+
+# desktop integration (menuinst), as in other conda-forge Electron apps
+mkdir -p "${PREFIX}/Menu"
+cp "${RECIPE_DIR}/positron.json" "${PREFIX}/Menu/positron.json"
+cp "${PREFIX}/lib/positron/resources/app/resources/linux/positron.png" "${PREFIX}/Menu/positron.png"
+
 # collect the license files of everything bundled in the app (npm packages, PDF.js, vendored python)
 python - <<'PY'
 import os, re, shutil
@@ -115,4 +130,20 @@ for root, dirs, files in os.walk(app):
             dst = os.path.join(out, rel)
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             shutil.copy2(os.path.join(root, f), dst)
+# summary of the declared license of every bundled npm package (covers packages without a license file)
+import json
+rows = set()
+for root, dirs, files in os.walk(app):
+    if "package.json" in files and os.path.basename(os.path.dirname(root)) in ("node_modules",) or \
+       "package.json" in files and os.path.basename(os.path.dirname(os.path.dirname(root))) == "node_modules":
+        try:
+            meta = json.load(open(os.path.join(root, "package.json")))
+        except Exception:
+            continue
+        if meta.get("name") and meta.get("version"):
+            lic = meta.get("license") or meta.get("licenses") or "UNKNOWN"
+            rows.add(f"{meta['name']}@{meta['version']}\t{json.dumps(lic) if not isinstance(lic, str) else lic}")
+os.makedirs(out, exist_ok=True)
+with open(os.path.join(out, "npm-packages.tsv"), "w") as fh:
+    fh.write("\n".join(sorted(rows)) + "\n")
 PY

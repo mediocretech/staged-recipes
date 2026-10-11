@@ -130,6 +130,7 @@ requirements:
     - glib
     - unixodbc
     - quarto
+    - ripgrep
 
 tests:
   - script:
@@ -137,6 +138,9 @@ tests:
       - test -x ${PREFIX}/lib/positron/resources/app/extensions/positron-r/resources/ark/ark
       - test -x ${PREFIX}/lib/positron/resources/app/extensions/positron-supervisor/resources/kallichore/kcserver
       - test -x ${PREFIX}/lib/positron/resources/app/extensions/positron-python/python-env-tools/pet
+      - test -f ${PREFIX}/Menu/positron.json
+      - test -f ${PREFIX}/Menu/positron.png
+      - ${PREFIX}/lib/positron/resources/app/node_modules.asar.unpacked/@vscode/ripgrep-universal/bin/linux-x64/rg --version
 
 about:
   homepage: https://positron.posit.co/
